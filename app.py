@@ -10,7 +10,7 @@ from datetime import datetime
 app = Flask(__name__)
 
 # CONFIGURACIÓN DIRECTA (sin config.py)
-app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql+psycopg2://neondb_owner:npg_5mxh7JjzNHyq@ep-summer-bonus-a4gqupm1-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require"
+app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql+psycopg2://neondb_owner:npg_5mxh7JjzNHyq@ep-summer-bonus-a4gqupm1.us-east-1.aws.neon.tech/neondb?sslmode=require"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -250,3 +250,4 @@ def borrar_cuenta():
 @app.route("/")
 def root():
     return jsonify({"mensaje": "¡ScrapDealer Backend FULL ACTIVADO! 🌱"}), 200
+
