@@ -232,6 +232,25 @@ def retirar_fondos():
     db.session.commit()
     return jsonify({"mensaje": "Retiro exitoso", "nuevo_saldo": usuario.saldo}), 200
 
+@app.route('/api/material/<int:id>', methods=['DELETE'])
+def eliminar_material(id):
+    """
+    Elimina un material registrado por su ID
+    Ejemplo: DELETE /api/material/5
+    """
+    material = Material.query.get(id)
+    
+    if material is None:
+        return jsonify({"error": "Material no encontrado"}), 404
+    
+    try:
+        db.session.delete(material)
+        db.session.commit()
+        return jsonify({"mensaje": "Material eliminado correctamente"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": "Error al eliminar el material"}), 500
+
 @app.route('/api/usuario', methods=['DELETE'])
 def borrar_cuenta():
     data = request.get_json()
@@ -250,6 +269,7 @@ def borrar_cuenta():
 @app.route("/")
 def root():
     return jsonify({"mensaje": "¡ScrapDealer Backend FULL ACTIVADO! 🌱"}), 200
+
 
 
 
