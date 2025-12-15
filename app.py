@@ -1,4 +1,4 @@
-# app.py - VERSIÓN ÚNICA Y FINAL PARA RENDER
+# app.py - VERSIÓN MODIFICADA CON SOPORTE PARA "MIS MATERIALES"
 import os
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -25,7 +25,7 @@ def after_request(response):
 # CREAR db DIRECTAMENTE
 db = SQLAlchemy(app)
 
-# MODELOS DIRECTOS (sin models.py)
+# MODELOS
 class Usuario(db.Model):
     __tablename__ = 'usuario'
     id = db.Column(db.Integer, primary_key=True)
@@ -41,6 +41,8 @@ class Material(db.Model):
     cantidad = db.Column(db.Float, nullable=False)
     lat = db.Column(db.Float)
     lon = db.Column(db.Float)
+    email = db.Column(db.String(120), nullable=False)  # ← NUEVO: quién registró el material
+    fecha = db.Column(db.DateTime, default=datetime.utcnow)  # ← NUEVO: fecha de registro
 
 class Solicitud(db.Model):
     __tablename__ = 'solicitudes'
@@ -80,13 +82,10 @@ def register():
     nombre = data.get('nombre')
     email = data.get('email')
     password = data.get('password')
-
     if not all([nombre, email, password]):
         return jsonify({"error": "Faltan datos"}), 400
-
     if Usuario.query.filter_by(email=email).first():
         return jsonify({"error": "Email ya existe"}), 400
-
     hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
     nuevo = Usuario(nombre=nombre, email=email, password=hashed.decode('utf-8'), saldo=0.0)
     db.session.add(nuevo)
@@ -98,14 +97,11 @@ def login():
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')
-
     if not email or not password:
         return jsonify({"error": "Faltan datos"}), 400
-
     usuario = Usuario.query.filter_by(email=email).first()
     if not usuario or not bcrypt.checkpw(password.encode('utf-8'), usuario.password.encode('utf-8')):
         return jsonify({"error": "Credenciales incorrectas"}), 401
-
     return jsonify({
         "mensaje": "Login exitoso",
         "nombre": usuario.nombre,
@@ -113,44 +109,75 @@ def login():
         "id": usuario.id
     }), 200
 
+# ← MODIFICADO: ahora requiere email
 @app.route('/api/material', methods=['POST'])
 def add_material():
     data = request.get_json()
-    if not data or 'tipo' not in data or 'cantidad' not in data:
-        return jsonify({"error": "Faltan datos"}), 400
-
+    if not data or 'tipo' not in data or 'cantidad' not in data or 'email' not in data:
+        return jsonify({"error": "Faltan datos (tipo, cantidad, email)"}), 400
+    
     nuevo = Material(
         tipo=data['tipo'].lower(),
         cantidad=data['cantidad'],
         lat=data.get('lat'),
-        lon=data.get('lon')
+        lon=data.get('lon'),
+        email=data['email']  # ← Se guarda el email del usuario
     )
     db.session.add(nuevo)
     db.session.commit()
     return jsonify({"mensaje": "Material registrado"}), 201
+
+# ← NUEVO ENDPOINT: Mis materiales del usuario
+@app.route('/api/mis_materiales', methods=['GET'])
+def mis_materiales():
+    email = request.args.get('email')
+    if not email:
+        return jsonify({"error": "Falta email"}), 400
+    
+    materiales = Material.query.filter_by(email=email).order_by(Material.fecha.desc()).all()
+    
+    resultado = []
+    for m in materiales:
+        precio_kg = PRECIOS_MATERIALES.get(m.tipo.lower(), 0.0)
+        valor_total = round(precio_kg * m.cantidad, 2)
+        
+        resultado.append({
+            "id": m.id,
+            "tipo": m.tipo,
+            "cantidad": m.cantidad,
+            "precio_por_kg": precio_kg,
+            "valor_total": valor_total,
+            "lat": m.lat,
+            "lon": m.lon,
+            "created_at": m.fecha.isoformat() if m.fecha else None
+        })
+    
+    return jsonify(resultado), 200
 
 @app.route('/api/materiales_cercanos', methods=['GET'])
 def cercanos():
     try:
         lat = float(request.args.get('lat'))
         lon = float(request.args.get('lon'))
-        radio = float(request.args.get('radio', 50))
+        radio = float(request.args.get('radio', 10000))  # Radio grande por defecto para pruebas
     except:
         return jsonify({"error": "Parámetros inválidos"}), 400
-
+    
     materiales = Material.query.all()
     resultado = []
     for m in materiales:
         if m.lat and m.lon:
             dist = geodesic((lat, lon), (m.lat, m.lon)).km
             if dist <= radio:
+                precio_kg = PRECIOS_MATERIALES.get(m.tipo.lower(), 0.0)
                 resultado.append({
                     "id": m.id,
                     "tipo": m.tipo,
                     "cantidad": m.cantidad,
                     "lat": m.lat,
                     "lon": m.lon,
-                    "distancia_km": round(dist, 2)
+                    "distancia_km": round(dist, 2),
+                    "precio_por_kg": precio_kg
                 })
     resultado.sort(key=lambda x: x['distancia_km'])
     return jsonify(resultado)
@@ -163,14 +190,11 @@ def crear_solicitud():
     precio_por_kg = data.get('precio_por_kg')
     cantidad_kg = data.get('cantidad_kg')
     total = data.get('total')
-
     if not all([email, material, precio_por_kg, cantidad_kg, total]):
         return jsonify({"error": "Faltan datos"}), 400
-
     usuario = Usuario.query.filter_by(email=email).first()
     if not usuario:
         return jsonify({"error": "Usuario no encontrado"}), 404
-
     nueva = Solicitud(
         email=email,
         material=material,
@@ -187,7 +211,6 @@ def listar_solicitudes():
     email = request.args.get('email')
     if not email:
         return jsonify({"error": "Falta email"}), 400
-
     solicitudes = Solicitud.query.filter_by(email=email).order_by(Solicitud.fecha.desc()).all()
     resultado = [{
         "id": s.id,
@@ -198,7 +221,6 @@ def listar_solicitudes():
         "estado": s.estado,
         "fecha": s.fecha.isoformat()
     } for s in solicitudes]
-
     return jsonify(resultado), 200
 
 @app.route('/api/saldo', methods=['GET'])
@@ -206,11 +228,9 @@ def ver_saldo():
     email = request.args.get('email')
     if not email:
         return jsonify({"error": "Falta email"}), 400
-
     usuario = Usuario.query.filter_by(email=email).first()
     if not usuario:
         return jsonify({"error": "Usuario no encontrado"}), 404
-
     return jsonify({"saldo": usuario.saldo}), 200
 
 @app.route('/api/retirar', methods=['POST'])
@@ -218,17 +238,13 @@ def retirar_fondos():
     data = request.get_json()
     email = data.get('email')
     monto = data.get('monto')
-
     if not email or not monto or monto <= 0:
         return jsonify({"error": "Datos inválidos"}), 400
-
     usuario = Usuario.query.filter_by(email=email).first()
     if not usuario:
         return jsonify({"error": "Usuario no encontrado"}), 404
-
     if usuario.saldo < monto:
         return jsonify({"error": "Saldo insuficiente"}), 400
-
     usuario.saldo -= monto
     db.session.commit()
     return jsonify({"mensaje": "Retiro exitoso", "nuevo_saldo": usuario.saldo}), 200
@@ -239,18 +255,19 @@ def borrar_cuenta():
     email = data.get('email')
     if not email:
         return jsonify({"error": "Falta email"}), 400
-
     usuario = Usuario.query.filter_by(email=email).first()
     if not usuario:
         return jsonify({"error": "Usuario no encontrado"}), 404
-
     db.session.delete(usuario)
     db.session.commit()
     return jsonify({"mensaje": "Cuenta borrada"}), 200
 
 @app.route("/")
 def root():
-    return jsonify({"mensaje": "¡ScrapDealer Backend FULL ACTIVADO! 🌱"}), 200
+    return jsonify({"mensaje": "¡ScrapDealer Backend MODIFICADO y LISTO! ♻️"}), 200
+
+if __name__ == '__main__':
+    app.run(debug=True)
 
 
 
