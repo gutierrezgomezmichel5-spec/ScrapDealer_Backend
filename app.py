@@ -95,22 +95,32 @@ def register():
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    data = request.get_json()
-    email = data.get('email')
-    password = data.get('password')
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
 
-    if not email or not password:
-        return jsonify({"error": "Faltan datos"}), 400
+        if not email or not password:
+            return jsonify({"error": "Faltan datos"}), 400
 
-    usuario = Usuario.query.filter_by(email=email).first()
-    if not usuario or not bcrypt.checkpw(password.encode('utf-8'), usuario.password):
-        return jsonify({"error": "Credenciales incorrectas"}), 401
+        usuario = Usuario.query.filter_by(email=email).first()
+        if not usuario:
+            return jsonify({"error": "Usuario no encontrado"}), 404
 
-    return jsonify({
-        "mensaje": "Login exitoso",
-        "nombre": usuario.nombre,
-        "email": usuario.email
-    }), 200
+        # Verificar directamente contra bytes
+        if not bcrypt.checkpw(password.encode('utf-8'), usuario.password):
+            return jsonify({"error": "Credenciales incorrectas"}), 401
+
+        return jsonify({
+            "mensaje": "Login exitoso",
+            "nombre": usuario.nombre,
+            "email": usuario.email
+        }), 200
+
+    except Exception as e:
+        print("Error en login:", str(e))
+        return jsonify({"error": "Error inesperado en el servidor"}), 500
+
 
 @app.route('/api/material', methods=['POST'])
 def add_material():
@@ -269,6 +279,7 @@ def borrar_cuenta():
 @app.route("/")
 def root():
     return jsonify({"mensaje": "¡ScrapDealer Backend FULL ACTIVADO! 🌱"}), 200
+
 
 
 
