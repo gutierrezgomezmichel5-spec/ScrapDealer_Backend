@@ -31,7 +31,7 @@ class Usuario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password = db.Column(db.LargeBinary(60), nullable=False)
+    password = db.Column(db.String(255), nullable=False)
     saldo = db.Column(db.Float, default=0.0)
 
 class Material(db.Model):
@@ -88,39 +88,29 @@ def register():
         return jsonify({"error": "Email ya existe"}), 400
 
     hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-    nuevo = Usuario(nombre=nombre, email=email, password=hashed, saldo=0.0)
+    nuevo = Usuario(nombre=nombre, email=email, password=hashed.decode('utf-8'), saldo=0.0)
     db.session.add(nuevo)
     db.session.commit()
     return jsonify({"mensaje": "Usuario creado con éxito"}), 201
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    try:
-        data = request.get_json()
-        email = data.get('email')
-        password = data.get('password')
+    data = request.get_json()
+    email = data.get('email')
+    password = data.get('password')
 
-        if not email or not password:
-            return jsonify({"error": "Faltan datos"}), 400
+    if not email or not password:
+        return jsonify({"error": "Faltan datos"}), 400
 
-        usuario = Usuario.query.filter_by(email=email).first()
-        if not usuario:
-            return jsonify({"error": "Usuario no encontrado"}), 404
+    usuario = Usuario.query.filter_by(email=email).first()
+    if not usuario or not bcrypt.checkpw(password.encode('utf-8'), usuario.password.encode('utf-8')):
+        return jsonify({"error": "Credenciales incorrectas"}), 401
 
-        # Verificar directamente contra bytes
-        if not bcrypt.checkpw(password.encode('utf-8'), usuario.password):
-            return jsonify({"error": "Credenciales incorrectas"}), 401
-
-        return jsonify({
-            "mensaje": "Login exitoso",
-            "nombre": usuario.nombre,
-            "email": usuario.email
-        }), 200
-
-    except Exception as e:
-        print("Error en login:", str(e))
-        return jsonify({"error": "Error inesperado en el servidor"}), 500
-
+    return jsonify({
+        "mensaje": "Login exitoso",
+        "nombre": usuario.nombre,
+        "email": usuario.email
+    }), 200
 
 @app.route('/api/material', methods=['POST'])
 def add_material():
@@ -137,25 +127,6 @@ def add_material():
     db.session.add(nuevo)
     db.session.commit()
     return jsonify({"mensaje": "Material registrado"}), 201
-
-@app.route('/api/material/<int:id>', methods=['DELETE'])
-def eliminar_material(id):
-    """
-    Elimina un material registrado por su ID
-    Ejemplo: DELETE /api/material/5
-    """
-    material = Material.query.get(id)
-    
-    if material is None:
-        return jsonify({"error": "Material no encontrado"}), 404
-    
-    try:
-        db.session.delete(material)
-        db.session.commit()
-        return jsonify({"mensaje": "Material eliminado correctamente"}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": "Error al eliminar el material"}), 500
 
 @app.route('/api/materiales_cercanos', methods=['GET'])
 def cercanos():
