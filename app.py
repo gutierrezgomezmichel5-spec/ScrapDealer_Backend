@@ -1,16 +1,16 @@
-# app.py - VERSIÓN FINAL CON RANKING POR USUARIO REAL
+# app.py - VERSIÓN ÚNICA Y FINAL PARA RENDER
 import os
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from geopy.distance import geodesic
 import bcrypt
-from datetime import datetime, timedelta  # ← AÑADIDO timedelta
-from sqlalchemy import func, case  # ← AÑADIDO para el ranking
+from datetime import datetime, timedelta  # AÑADIDO timedelta
+from sqlalchemy import func, case  # AÑADIDO para ranking
 
 app = Flask(__name__)
 
-# CONFIGURACIÓN DIRECTA
+# CONFIGURACIÓN DIRECTA (sin config.py)
 app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://neondb_owner:npg_c8hEfZGHtF9u@ep-dark-wind-a43w5ev8-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -23,9 +23,10 @@ def after_request(response):
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
     return response
 
+# CREAR db DIRECTAMENTE
 db = SQLAlchemy(app)
 
-# MODELOS ACTUALIZADOS
+# MODELOS DIRECTOS (sin models.py)
 class Usuario(db.Model):
     __tablename__ = 'usuario'
     id = db.Column(db.Integer, primary_key=True)
@@ -41,8 +42,7 @@ class Material(db.Model):
     cantidad = db.Column(db.Float, nullable=False)
     lat = db.Column(db.Float)
     lon = db.Column(db.Float)
-    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)  # ← NUEVO
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)  # ← NUEVO
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)  # ← AÑADIDO
 
 class Solicitud(db.Model):
     __tablename__ = 'solicitudes'
@@ -111,23 +111,20 @@ def login():
     return jsonify({
         "mensaje": "Login exitoso",
         "nombre": usuario.nombre,
-        "email": usuario.email,
-        "id": usuario.id  # ← DEVUELVE EL ID PARA USARLO EN FLUTTER
+        "email": usuario.email
     }), 200
 
 @app.route('/api/material', methods=['POST'])
 def add_material():
     data = request.get_json()
-    required = ['tipo', 'cantidad', 'usuario_id']
-    if not data or not all(k in data for k in required):
-        return jsonify({"error": "Faltan datos (tipo, cantidad, usuario_id)"}), 400
+    if not data or 'tipo' not in data or 'cantidad' not in data:
+        return jsonify({"error": "Faltan datos"}), 400
 
     nuevo = Material(
         tipo=data['tipo'].lower(),
         cantidad=data['cantidad'],
         lat=data.get('lat'),
-        lon=data.get('lon'),
-        usuario_id=data['usuario_id']  # ← GUARDAMOS EL USUARIO
+        lon=data.get('lon')
     )
     db.session.add(nuevo)
     db.session.commit()
@@ -158,48 +155,6 @@ def cercanos():
                 })
     resultado.sort(key=lambda x: x['distancia_km'])
     return jsonify(resultado)
-
-@app.route('/api/ranking_semanal', methods=['GET'])
-def ranking_semanal():
-    fecha_inicio = datetime.utcnow() - timedelta(days=7)
-
-    # Factores CO2 por kg
-    co2_mapping = case(
-        (Material.tipo == 'pet', 2.15),
-        (Material.tipo == 'hdpe', 1.90),
-        (Material.tipo == 'papel', 0.95),
-        (Material.tipo == 'carton', 0.95),
-        (Material.tipo == 'vidrio', 0.30),
-        (Material.tipo == 'aluminio', 9.0),
-        (Material.tipo == 'acero', 1.8),
-        (Material.tipo == 'organico', 0.5),
-        else_=1.0
-    )
-
-    ranking = db.session.query(
-        Usuario.nombre,
-        func.sum(Material.cantidad * co2_mapping).label('total_co2')
-    ).join(Material, Usuario.id == Material.usuario_id)\
-     .filter(Material.created_at >= fecha_inicio)\
-     .group_by(Usuario.id, Usuario.nombre)\
-     .order_by(func.sum(Material.cantidad * co2_mapping).desc())\
-     .limit(10)\
-     .all()
-
-    resultado = [
-        {
-            "nombre": r.nombre or "Anónimo",
-            "total_co2": round(float(r.total_co2 or 0), 2)
-        }
-        for r in ranking
-    ]
-
-    if not resultado:
-        resultado = [{"nombre": "Aún nadie esta semana", "total_co2": 0.0}]
-
-    return jsonify(resultado), 200
-
-# ... (el resto de tus endpoints: solicitudes, saldo, retirar, borrar_cuenta, root quedan IGUAL)
 
 @app.route('/api/solicitudes', methods=['POST'])
 def crear_solicitud():
@@ -296,10 +251,4 @@ def borrar_cuenta():
 
 @app.route("/")
 def root():
-    return jsonify({"mensaje": "¡ScrapDealer Backend FULL ACTIVADO CON RANKING POR USUARIO! 🌱"}), 200
-
-
-
-
-
-
+    return jsonify({"mensaje": "¡ScrapDealer Backend FULL ACTIVADO! 🌱"}), 200
