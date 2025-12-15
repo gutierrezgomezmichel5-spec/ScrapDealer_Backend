@@ -1,4 +1,4 @@
-# app.py - VERSIÓN FINAL FUNCIONANDO 100% (15 dic 2025)
+# app.py - VERSIÓN FINAL COMPLETA CON MIS MATERIALES (15 dic 2025)
 import os
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -41,7 +41,7 @@ class Material(db.Model):
     cantidad = db.Column(db.Float, nullable=False)
     lat = db.Column(db.Float)
     lon = db.Column(db.Float)
-    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=True)  # nullable para compatibilidad
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=True)
 
 class Solicitud(db.Model):
@@ -59,7 +59,7 @@ with app.app_context():
     db.create_all()
     print("¡Tablas creadas o ya existen en Neon!")
 
-# PRECIOS
+# PRECIOS DE MATERIALES
 PRECIOS_MATERIALES = {
     "pet": 5.50, "hdpe": 4.80, "aluminio": 25.00, "acero": 8.00,
     "carton": 2.50, "papel": 3.00, "vidrio": 1.80, "organico": 1.20
@@ -100,30 +100,72 @@ def login():
         "mensaje": "Login exitoso",
         "nombre": usuario.nombre,
         "email": usuario.email,
-        "id": usuario.id  # útil para el frontend
+        "id": usuario.id
     }), 200
 
-# ← AQUÍ ESTÁ EL ENDPOINT CORREGIDO (acepta usuario_id opcional)
+# ENDPOINT MEJORADO PARA REGISTRAR MATERIAL
 @app.route('/api/material', methods=['POST'])
 def add_material():
     data = request.get_json()
     if not data or 'tipo' not in data or 'cantidad' not in data:
         return jsonify({"error": "Faltan datos"}), 400
     
-    usuario_id = data.get('usuario_id')  # Puede ser None si no está logueado aún
+    usuario_id = data.get('usuario_id')
+    
+    # Si no viene usuario_id pero sí email, lo buscamos
+    if not usuario_id and data.get('email'):
+        usuario = Usuario.query.filter_by(email=data['email']).first()
+        if usuario:
+            usuario_id = usuario.id
     
     nuevo = Material(
         tipo=data['tipo'].lower(),
         cantidad=data['cantidad'],
         lat=data.get('lat'),
         lon=data.get('lon'),
-        usuario_id=usuario_id  # ← Ahora sí se asigna (puede ser None)
+        usuario_id=usuario_id  # Puede ser None
     )
     db.session.add(nuevo)
     db.session.commit()
-    return jsonify({"mensaje": "Material registrado"}), 201
+    return jsonify({
+        "mensaje": "Material registrado",
+        "id": nuevo.id
+    }), 201
 
-# ← NUEVO: RANKING SEMANAL (el que faltaba y causaba el error 500)
+# NUEVO ENDPOINT: MIS MATERIALES REGISTRADOS
+@app.route('/api/mis_materiales', methods=['GET'])
+def mis_materiales():
+    email = request.args.get('email')
+    if not email:
+        return jsonify({"error": "Falta email"}), 400
+    
+    usuario = Usuario.query.filter_by(email=email).first()
+    if not usuario:
+        return jsonify({"error": "Usuario no encontrado"}), 404
+    
+    # Trae materiales del usuario + los antiguos sin usuario_id (por compatibilidad)
+    materiales = Material.query.filter(
+        (Material.usuario_id == usuario.id) | (Material.usuario_id.is_(None))
+    ).order_by(Material.created_at.desc()).all()
+    
+    resultado = []
+    for m in materiales:
+        precio = PRECIOS_MATERIALES.get(m.tipo, 0.0)
+        valor_total = round(m.cantidad * precio, 2)
+        resultado.append({
+            "id": m.id,
+            "tipo": m.tipo.capitalize(),
+            "cantidad": m.cantidad,
+            "precio_por_kg": precio,
+            "valor_total": valor_total,
+            "lat": m.lat,
+            "lon": m.lon,
+            "created_at": m.created_at.isoformat() if m.created_at else None
+        })
+    
+    return jsonify(resultado), 200
+
+# RANKING SEMANAL
 @app.route('/api/ranking_semanal', methods=['GET'])
 def ranking_semanal():
     try:
@@ -162,10 +204,10 @@ def ranking_semanal():
         return jsonify(resultado), 200
         
     except Exception as e:
-        print("Error en ranking:", str(e))  # Para debug en logs de Render
+        print("Error en ranking:", str(e))
         return jsonify([{"nombre": "Ranking temporalmente no disponible", "total_co2": 0.0}]), 200
 
-# Los demás endpoints que ya tenías (sin cambios)
+# RESTO DE ENDPOINTS (sin cambios)
 @app.route('/api/materiales_cercanos', methods=['GET'])
 def cercanos():
     try:
@@ -270,4 +312,5 @@ def root():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
