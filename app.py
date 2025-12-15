@@ -103,34 +103,48 @@ def login():
         "id": usuario.id
     }), 200
 
-# ENDPOINT MEJORADO PARA REGISTRAR MATERIAL
 @app.route('/api/material', methods=['POST'])
 def add_material():
-    data = request.get_json()
-    if not data or 'tipo' not in data or 'cantidad' not in data:
-        return jsonify({"error": "Faltan datos"}), 400
-    
-    usuario_id = data.get('usuario_id')
-    
-    # Si no viene usuario_id pero sí email, lo buscamos
-    if not usuario_id and data.get('email'):
-        usuario = Usuario.query.filter_by(email=data['email']).first()
-        if usuario:
-            usuario_id = usuario.id
-    
-    nuevo = Material(
-        tipo=data['tipo'].lower(),
-        cantidad=data['cantidad'],
-        lat=data.get('lat'),
-        lon=data.get('lon'),
-        usuario_id=usuario_id  # Puede ser None
-    )
-    db.session.add(nuevo)
-    db.session.commit()
-    return jsonify({
-        "mensaje": "Material registrado",
-        "id": nuevo.id
-    }), 201
+    try:
+        data = request.get_json()
+        if not data or 'tipo' not in data or 'cantidad' not in data:
+            return jsonify({"error": "Faltan datos"}), 400
+        
+        usuario_id = data.get('usuario_id')
+        
+        # Si no viene usuario_id pero sí email, lo buscamos
+        if not usuario_id and data.get('email'):
+            usuario = Usuario.query.filter_by(email=data['email']).first()
+            if usuario:
+                usuario_id = usuario.id
+        
+        # Validación extra de cantidad
+        try:
+            cantidad = float(data['cantidad'])
+            if cantidad <= 0:
+                return jsonify({"error": "La cantidad debe ser mayor a 0"}), 400
+        except:
+            return jsonify({"error": "Cantidad inválida"}), 400
+        
+        nuevo = Material(
+            tipo=data['tipo'].lower(),
+            cantidad=cantidad,
+            lat=data.get('lat'),
+            lon=data.get('lon'),
+            usuario_id=usuario_id
+        )
+        db.session.add(nuevo)
+        db.session.commit()
+        
+        return jsonify({
+            "mensaje": "Material registrado con éxito",
+            "id": nuevo.id
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()  # Importante: rollback si falla
+        print("ERROR al registrar material:", str(e))  # Se ve en logs de Render/local
+        return jsonify({"error": "Error interno al registrar material"}), 500
 
 # NUEVO ENDPOINT: MIS MATERIALES REGISTRADOS
 @app.route('/api/mis_materiales', methods=['GET'])
@@ -311,6 +325,6 @@ def root():
     return jsonify({"mensaje": "¡ScrapDealer Backend FULL ACTIVADO! 🌱"}), 200
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5000)
 
 
