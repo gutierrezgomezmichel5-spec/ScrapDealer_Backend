@@ -16,6 +16,8 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 CORS(app, resources={r"/*": {"origins": "*"}})
 
+
+
 @app.after_request
 def after_request(response):
     response.headers.add('Access-Control-Allow-Origin', '*')
@@ -41,7 +43,7 @@ class Material(db.Model):
     cantidad = db.Column(db.Float, nullable=False)
     lat = db.Column(db.Float)
     lon = db.Column(db.Float)
-    usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=True)
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=True)
 
 class Solicitud(db.Model):
@@ -105,62 +107,35 @@ def login():
 
 @app.route('/api/material', methods=['POST'])
 def add_material():
+    data = request.get_json()
+    if not data or 'tipo' not in data or 'cantidad' not in data:
+        return jsonify({"error": "Faltan datos"}), 400
+    
     try:
-        data = request.get_json()
-        if not data or 'tipo' not in data or 'cantidad' not in data:
-            return jsonify({"error": "Faltan datos"}), 400
-        
-        usuario_id = data.get('usuario_id')
-        
-        # Si no viene usuario_id pero sí email, lo buscamos
-        if not usuario_id and data.get('email'):
-            usuario = Usuario.query.filter_by(email=data['email']).first()
-            if usuario:
-                usuario_id = usuario.id
-        
-        # Validación extra de cantidad
-        try:
-            cantidad = float(data['cantidad'])
-            if cantidad <= 0:
-                return jsonify({"error": "La cantidad debe ser mayor a 0"}), 400
-        except:
-            return jsonify({"error": "Cantidad inválida"}), 400
-        
-        nuevo = Material(
-            tipo=data['tipo'].lower(),
-            cantidad=cantidad,
-            lat=data.get('lat'),
-            lon=data.get('lon'),
-            usuario_id=usuario_id
-        )
-        db.session.add(nuevo)
-        db.session.commit()
-        
-        return jsonify({
-            "mensaje": "Material registrado con éxito",
-            "id": nuevo.id
-        }), 201
-        
-    except Exception as e:
-        db.session.rollback()  # Importante: rollback si falla
-        print("ERROR al registrar material:", str(e))  # Se ve en logs de Render/local
-        return jsonify({"error": "Error interno al registrar material"}), 500
+        cantidad = float(data['cantidad'])
+        if cantidad <= 0:
+            return jsonify({"error": "La cantidad debe ser mayor a 0"}), 400
+    except:
+        return jsonify({"error": "Cantidad inválida"}), 400
+    
+    nuevo = Material(
+        tipo=data['tipo'].lower(),
+        cantidad=cantidad,
+        lat=data.get('lat'),
+        lon=data.get('lon')
+    )
+    db.session.add(nuevo)
+    db.session.commit()
+    return jsonify({
+        "mensaje": "Material registrado",
+        "id": nuevo.id
+    }), 201
+
 
 # NUEVO ENDPOINT: MIS MATERIALES REGISTRADOS
 @app.route('/api/mis_materiales', methods=['GET'])
 def mis_materiales():
-    email = request.args.get('email')
-    if not email:
-        return jsonify({"error": "Falta email"}), 400
-    
-    usuario = Usuario.query.filter_by(email=email).first()
-    if not usuario:
-        return jsonify({"error": "Usuario no encontrado"}), 404
-    
-    # Trae materiales del usuario + los antiguos sin usuario_id (por compatibilidad)
-    materiales = Material.query.filter(
-        (Material.usuario_id == usuario.id) | (Material.usuario_id.is_(None))
-    ).order_by(Material.created_at.desc()).all()
+    materiales = Material.query.order_by(Material.created_at.desc()).all()
     
     resultado = []
     for m in materiales:
@@ -179,12 +154,13 @@ def mis_materiales():
     
     return jsonify(resultado), 200
 
+
 # RANKING SEMANAL
 @app.route('/api/ranking_semanal', methods=['GET'])
 def ranking_semanal():
     try:
         fecha_inicio = datetime.utcnow() - timedelta(days=7)
-        
+
         co2_mapping = case(
             (Material.tipo == 'pet', 2.15),
             (Material.tipo == 'hdpe', 1.90),
@@ -196,30 +172,30 @@ def ranking_semanal():
             (Material.tipo == 'organico', 0.5),
             else_=1.0
         )
-        
+
         ranking = db.session.query(
-            func.coalesce(Usuario.nombre, "Anónimo").label('nombre'),
+            Material.tipo.label('tipo'),
             func.sum(Material.cantidad * co2_mapping).label('total_co2')
-        ).outerjoin(Material, Usuario.id == Material.usuario_id)\
-         .filter(Material.created_at >= fecha_inicio)\
-         .group_by(Usuario.id, Usuario.nombre)\
+        ).filter(Material.created_at >= fecha_inicio)\
+         .group_by(Material.tipo)\
          .order_by(func.sum(Material.cantidad * co2_mapping).desc())\
          .limit(10)\
          .all()
-         
+
         resultado = [
-            {"nombre": r.nombre or "Anónimo", "total_co2": round(float(r.total_co2 or 0), 2)}
+            {"tipo": r.tipo.capitalize(), "total_co2": round(float(r.total_co2 or 0), 2)}
             for r in ranking
         ]
-        
+
         if not resultado:
-            resultado = [{"nombre": "Aún nadie esta semana", "total_co2": 0.0}]
-            
-        return jsonify(resultado), 200
+            resultado = [{"tipo": "Aún nadie esta semana", "total_co2": 0.0}]
         
+        return jsonify(resultado), 200
+
     except Exception as e:
         print("Error en ranking:", str(e))
-        return jsonify([{"nombre": "Ranking temporalmente no disponible", "total_co2": 0.0}]), 200
+        return jsonify([{"tipo": "Ranking temporalmente no disponible", "total_co2": 0.0}]), 200
+
 
 # RESTO DE ENDPOINTS (sin cambios)
 @app.route('/api/materiales_cercanos', methods=['GET'])
