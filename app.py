@@ -31,7 +31,7 @@ class Usuario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password = db.Column(db.String(255), nullable=False)
+    password = db.Column(db.LargeBinary(60), nullable=False)
     saldo = db.Column(db.Float, default=0.0)
 
 class Material(db.Model):
@@ -88,7 +88,7 @@ def register():
         return jsonify({"error": "Email ya existe"}), 400
 
     hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-    nuevo = Usuario(nombre=nombre, email=email, password=hashed.decode('utf-8'), saldo=0.0)
+    nuevo = Usuario(nombre=nombre, email=email, password=hashed, saldo=0.0)
     db.session.add(nuevo)
     db.session.commit()
     return jsonify({"mensaje": "Usuario creado con éxito"}), 201
@@ -103,7 +103,7 @@ def login():
         return jsonify({"error": "Faltan datos"}), 400
 
     usuario = Usuario.query.filter_by(email=email).first()
-    if not usuario or not bcrypt.checkpw(password.encode('utf-8'), usuario.password.encode('utf-8')):
+    if not usuario or not bcrypt.checkpw(password.encode('utf-8'), usuario.password):
         return jsonify({"error": "Credenciales incorrectas"}), 401
 
     return jsonify({
@@ -269,6 +269,7 @@ def borrar_cuenta():
 @app.route("/")
 def root():
     return jsonify({"mensaje": "¡ScrapDealer Backend FULL ACTIVADO! 🌱"}), 200
+
 
 
 
