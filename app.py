@@ -128,6 +128,25 @@ def add_material():
     db.session.commit()
     return jsonify({"mensaje": "Material registrado"}), 201
 
+@app.route('/api/material/<int:id>', methods=['DELETE'])
+def eliminar_material(id):
+    """
+    Elimina un material registrado por su ID
+    Ejemplo: DELETE /api/material/5
+    """
+    material = Material.query.get(id)
+    
+    if material is None:
+        return jsonify({"error": "Material no encontrado"}), 404
+    
+    try:
+        db.session.delete(material)
+        db.session.commit()
+        return jsonify({"mensaje": "Material eliminado correctamente"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": "Error al eliminar el material"}), 500
+
 @app.route('/api/materiales_cercanos', methods=['GET'])
 def cercanos():
     try:
@@ -153,35 +172,6 @@ def cercanos():
                 })
     resultado.sort(key=lambda x: x['distancia_km'])
     return jsonify(resultado)
-
-@app.route('/api/ranking_semanal', methods=['GET'])
-def ranking_semanal():
-    # Como no tienes created_at ni usuario_id en Material, hacemos un ranking simple
-    # de total CO2 ahorrado en los últimos 7 días (global, no por usuario)
-
-    # Mapeo de CO2 por kg según tipo
-    CO2_POR_KG = {
-        "pet": 2.15,
-        "hdpe": 1.90,
-        "papel": 0.95,
-        "carton": 0.95,
-        "vidrio": 0.30,
-        "aluminio": 9.0,
-        "acero": 1.8,
-        "organico": 0.5,
-    }
-
-    materiales = Material.query.all()
-    total_co2 = 0.0
-
-    for m in materiales:
-        co2_factor = CO2_POR_KG.get(m.tipo.lower(), 1.0)
-        total_co2 += m.cantidad * co2_factor
-
-    return jsonify({
-        "total_co2_semana": round(total_co2, 2),
-        "mensaje": "Ranking global (próximamente por usuario)"
-    }), 200
 
 @app.route('/api/solicitudes', methods=['POST'])
 def crear_solicitud():
@@ -209,7 +199,6 @@ def crear_solicitud():
     db.session.add(nueva)
     db.session.commit()
     return jsonify({"mensaje": "Solicitud creada"}), 201
-
 
 @app.route('/api/solicitudes', methods=['GET'])
 def listar_solicitudes():
@@ -280,5 +269,6 @@ def borrar_cuenta():
 @app.route("/")
 def root():
     return jsonify({"mensaje": "¡ScrapDealer Backend FULL ACTIVADO! 🌱"}), 200
+
 
 
