@@ -109,7 +109,8 @@ def login():
     return jsonify({
         "mensaje": "Login exitoso",
         "nombre": usuario.nombre,
-        "email": usuario.email
+        "email": usuario.email,
+        "id": usuario.id
     }), 200
 
 @app.route('/api/material', methods=['POST'])
@@ -250,6 +251,7 @@ def borrar_cuenta():
 @app.route("/")
 def root():
     return jsonify({"mensaje": "¡ScrapDealer Backend FULL ACTIVADO! 🌱"}), 200
+
 
 
 
