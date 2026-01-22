@@ -220,62 +220,57 @@ def crear_solicitud():
         return jsonify({"error": "Content-Type debe ser application/json"}), 400
 
     data = request.get_json() or {}
-    
-    required_fields = {
-        'email': data.get('email'),
-        'material': data.get('material'),
-        'precio_por_kg': data.get('precio_por_kg'),
-        'cantidad_kg': data.get('cantidad_kg'),
-        'total': data.get('total')
-    }
 
-    missing = [field for field, value in required_fields.items() if value is None or value == ""]
-    
+    # Muestra en logs lo que realmente llega (crucial para debug)
+    print("\n===== POST /api/solicitudes recibida =====")
+    print("JSON recibido:", data)
+    print("Campos presentes:", list(data.keys()))
+    print("====================================\n")
+
+    required = ['email', 'material', 'precio_por_kg', 'cantidad_kg', 'total']
+    missing = [field for field in required if field not in data or data[field] in [None, '', 0]]
+
     if missing:
         return jsonify({
             "error": "Faltan campos obligatorios",
             "faltan": missing,
-            "recibidos": list(data.keys())
+            "recibidos": list(data.keys()),
+            "ejemplo_correcto": {
+                "email": "tucorreo@ejemplo.com",
+                "material": "PET",
+                "precio_por_kg": 5.50,
+                "cantidad_kg": 23.0,
+                "total": 126.50
+            }
         }), 400
 
     try:
-        precio_por_kg = float(required_fields['precio_por_kg'])
-        cantidad_kg   = float(required_fields['cantidad_kg'])
-        total         = float(required_fields['total'])
-    except (TypeError, ValueError):
-        return jsonify({"error": "precio_por_kg, cantidad_kg y total deben ser números válidos"}), 400
+        precio = float(data['precio_por_kg'])
+        cant   = float(data['cantidad_kg'])
+        tot    = float(data['total'])
+        if cant <= 0:
+            return jsonify({"error": "cantidad_kg debe ser > 0"}), 400
+        if abs(precio * cant - tot) > 0.1:
+            return jsonify({"error": "total no coincide con precio × cantidad"}), 400
+    except (ValueError, TypeError):
+        return jsonify({"error": "precio_por_kg, cantidad_kg y total deben ser números"}), 400
 
-    if cantidad_kg <= 0:
-        return jsonify({"error": "cantidad_kg debe ser mayor a 0"}), 400
-
-    # Opcional: verificar consistencia del cálculo
-    if abs(precio_por_kg * cantidad_kg - total) > 0.01:
-        return jsonify({"error": "El total no coincide aproximadamente con precio × cantidad"}), 400
-
-    usuario = Usuario.query.filter_by(email=required_fields['email']).first()
-    if not usuario:
+    # Verificar usuario existe
+    if not Usuario.query.filter_by(email=data['email']).first():
         return jsonify({"error": "Usuario no encontrado"}), 404
 
+    # Guardar (resto igual)
     nueva = Solicitud(
-        email=required_fields['email'],
-        material=str(required_fields['material']).strip().upper(),
-        precio_por_kg=precio_por_kg,
-        cantidad_kg=cantidad_kg,
-        total=total,
-        estado='en_recoleccion'
+        email=data['email'],
+        material=str(data['material']).strip().upper(),
+        precio_por_kg=precio,
+        cantidad_kg=cant,
+        total=tot
     )
+    db.session.add(nueva)
+    db.session.commit()
 
-    try:
-        db.session.add(nueva)
-        db.session.commit()
-        return jsonify({
-            "mensaje": "Solicitud creada correctamente",
-            "id": nueva.id
-        }), 201
-    except Exception as e:
-        db.session.rollback()
-        print(f"Error al guardar solicitud: {str(e)}")
-        return jsonify({"error": "Error al guardar en base de datos"}), 500
+    return jsonify({"mensaje": "Solicitud creada", "id": nueva.id}), 201
 
 @app.route('/api/solicitudes', methods=['GET'])
 def listar_solicitudes():
@@ -339,6 +334,7 @@ def root():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
