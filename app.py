@@ -9,6 +9,9 @@ from datetime import datetime
 
 app = Flask(__name__)
 
+app.config['DEBUG'] = True  # ← Temporal para debug
+app.config['PROPAGATE_EXCEPTIONS'] = True
+
 # CONFIGURACIÓN DIRECTA (sin config.py)
 app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://neondb_owner:npg_c8hEfZGHtF9u@ep-dark-wind-a43w5ev8-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -358,8 +361,19 @@ def borrar_cuenta():
 def root():
     return jsonify({"mensaje": "¡ScrapDealer Backend MODIFICADO y LISTO! ♻️"}), 200
 
+@app.errorhandler(Exception)
+def handle_exception(e):
+    print("GLOBAL EXCEPTION HANDLER:")
+    import traceback
+    traceback.print_exc()  # Esto imprime el traceback completo en los logs de Render
+    return jsonify({
+        "error": "Error interno del servidor",
+        "details": str(e)
+    }), 500
+
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
