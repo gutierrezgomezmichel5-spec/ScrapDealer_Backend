@@ -158,7 +158,6 @@ def add_material():
         traceback.print_exc()
         return jsonify({"error": "Error interno al registrar material"}), 500
 
-print(f"Consultando mis_materiales para email: {email}")
 print(f"Materiales encontrados: {len(materiales)}")
 
 # ← NUEVO ENDPOINT: Mis materiales del usuario
@@ -168,31 +167,31 @@ def mis_materiales():
     if not email:
         return jsonify({"error": "Falta email"}), 400
     
+    # ← Mueve el print AQUÍ dentro ↓
+    print(f"Consultando mis_materiales para email: {email}")
+    
     try:
         materiales = Material.query.filter_by(email=email).order_by(Material.fecha.desc()).all()
+        print(f"Materiales encontrados: {len(materiales)}")  # opcional, también útil
     except Exception as e:
         print(f"Error al consultar materiales: {str(e)}")
         return jsonify({"error": "Error al consultar la base de datos"}), 500
     
     resultado = []
     for m in materiales:
-        try:
-            precio_kg = PRECIOS_MATERIALES.get(m.tipo.lower(), 0.0)
-            valor_total = round(precio_kg * m.cantidad, 2)
-            
-            resultado.append({
-                "id": m.id,
-                "tipo": m.tipo,
-                "cantidad": m.cantidad,
-                "precio_por_kg": precio_kg,
-                "valor_total": valor_total,
-                "lat": m.lat,
-                "lon": m.lon,
-                "created_at": m.fecha.isoformat() if m.fecha is not None else None
-            })
-        except Exception as e:
-            print(f"Error procesando material ID {m.id}: {str(e)}")
-            # Opcional: continuar con el siguiente o devolver error parcial
+        precio_kg = PRECIOS_MATERIALES.get(m.tipo.lower(), 0.0)
+        valor_total = round(precio_kg * m.cantidad, 2)
+        
+        resultado.append({
+            "id": m.id,
+            "tipo": m.tipo,
+            "cantidad": m.cantidad,
+            "precio_por_kg": precio_kg,
+            "valor_total": valor_total,
+            "lat": m.lat,
+            "lon": m.lon,
+            "created_at": m.fecha.isoformat() if m.fecha is not None else None
+        })
     
     return jsonify(resultado), 200
 
@@ -344,6 +343,7 @@ def root():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
