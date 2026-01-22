@@ -158,7 +158,7 @@ def add_material():
         traceback.print_exc()
         return jsonify({"error": "Error interno al registrar material"}), 500
 
-print(f"Materiales encontrados: {len(materiales)}")
+
 
 # ← NUEVO ENDPOINT: Mis materiales del usuario
 @app.route('/api/mis_materiales', methods=['GET'])
@@ -167,19 +167,21 @@ def mis_materiales():
     if not email:
         return jsonify({"error": "Falta email"}), 400
     
-    # ← Mueve el print AQUÍ dentro ↓
+    # Prints de debug SOLO aquí dentro
     print(f"Consultando mis_materiales para email: {email}")
     
     try:
         materiales = Material.query.filter_by(email=email).order_by(Material.fecha.desc()).all()
-        print(f"Materiales encontrados: {len(materiales)}")  # opcional, también útil
+        print(f"Materiales encontrados: {len(materiales)}")
     except Exception as e:
-        print(f"Error al consultar materiales: {str(e)}")
+        print(f"Error al consultar materiales para {email}: {str(e)}")
+        import traceback
+        traceback.print_exc()  # muestra el traceback completo en logs
         return jsonify({"error": "Error al consultar la base de datos"}), 500
     
     resultado = []
     for m in materiales:
-        precio_kg = PRECIOS_MATERIALES.get(m.tipo.lower(), 0.0)
+        precio_kg = PRECIOS_MATERIALES.get((m.tipo or '').lower(), 0.0)
         valor_total = round(precio_kg * m.cantidad, 2)
         
         resultado.append({
@@ -343,6 +345,7 @@ def root():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
