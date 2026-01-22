@@ -165,36 +165,51 @@ def add_material():
 def mis_materiales():
     email = request.args.get('email')
     if not email:
+        print("Falta email en /mis_materiales")
         return jsonify({"error": "Falta email"}), 400
     
-    # Prints de debug SOLO aquí dentro
     print(f"Consultando mis_materiales para email: {email}")
     
     try:
         materiales = Material.query.filter_by(email=email).order_by(Material.fecha.desc()).all()
-        print(f"Materiales encontrados: {len(materiales)}")
+        print(f"Materiales encontrados para {email}: {len(materiales)}")
     except Exception as e:
-        print(f"Error al consultar materiales para {email}: {str(e)}")
+        print(f"ERROR en consulta SQL para {email}: {str(e)}")
         import traceback
-        traceback.print_exc()  # muestra el traceback completo en logs
-        return jsonify({"error": "Error al consultar la base de datos"}), 500
+        traceback.print_exc()
+        return jsonify({"error": "Error al consultar materiales"}), 500
     
     resultado = []
     for m in materiales:
-        precio_kg = PRECIOS_MATERIALES.get((m.tipo or '').lower(), 0.0)
-        valor_total = round(precio_kg * m.cantidad, 2)
-        
-        resultado.append({
-            "id": m.id,
-            "tipo": m.tipo,
-            "cantidad": m.cantidad,
-            "precio_por_kg": precio_kg,
-            "valor_total": valor_total,
-            "lat": m.lat,
-            "lon": m.lon,
-            "created_at": m.fecha.isoformat() if m.fecha is not None else None
-        })
+        try:
+            tipo_lower = (m.tipo or '').lower()
+            precio_kg = PRECIOS_MATERIALES.get(tipo_lower, 0.0)
+            cantidad = float(m.cantidad) if m.cantidad is not None else 0.0
+            valor_total = round(precio_kg * cantidad, 2)
+            
+            created_at = None
+            if m.fecha is not None:
+                try:
+                    created_at = m.fecha.isoformat()
+                except Exception as date_err:
+                    print(f"Error formateando fecha para material ID {m.id}: {str(date_err)}")
+            
+            resultado.append({
+                "id": m.id,
+                "tipo": m.tipo or "Desconocido",
+                "cantidad": cantidad,
+                "precio_por_kg": precio_kg,
+                "valor_total": valor_total,
+                "lat": m.lat,
+                "lon": m.lon,
+                "created_at": created_at
+            })
+        except Exception as item_err:
+            print(f"ERROR procesando material ID {m.id} para {email}: {str(item_err)}")
+            traceback.print_exc()
+            # Continúa con el siguiente para no fallar todo
     
+    print(f"Respuesta enviada: {len(resultado)} materiales")
     return jsonify(resultado), 200
 
 @app.route('/api/materiales_cercanos', methods=['GET'])
@@ -345,6 +360,7 @@ def root():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
