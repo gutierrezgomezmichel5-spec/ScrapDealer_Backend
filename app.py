@@ -13,7 +13,7 @@ app.config['DEBUG'] = True  # ← Temporal para debug
 app.config['PROPAGATE_EXCEPTIONS'] = True
 
 # CONFIGURACIÓN DIRECTA (sin config.py)
-app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://neondb_owner:npg_c8hEfZGHtF9u@ep-dark-wind-a43w5ev8-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://neondb_owner:npg_5mxh7JjzNHyq@ep-summer-bonus-a4gqupm1-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -379,6 +379,7 @@ with app.app_context():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
