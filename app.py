@@ -371,8 +371,15 @@ def handle_exception(e):
         "details": str(e)
     }), 500
 
+
+with app.app_context():
+    db.create_all()
+    print("Tablas creadas/verficadas al boot del servidor")
+
+
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
